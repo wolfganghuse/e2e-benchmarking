@@ -143,7 +143,7 @@ if [[ ${WORKLOAD} == node-density* ]]; then
 else
   echo "Job iterations: ${TEST_JOB_ITERATIONS}"
 fi
-if [[ ${WORKLOAD} == csi* ]]; then
+if [[ ${WORKLOAD} == cluster-density-combined-csi ]]; then
   echo "RWX Storage Class: ${CSI_RWX}"
   echo "RWX Storage Class: ${CSI_RWO}"
 fi
