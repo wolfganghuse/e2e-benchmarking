@@ -30,7 +30,7 @@ spec:
             command: 
               - "/bin/sh"
               - "-c"
-              - "curl ${WEBSERVER_HOSTNAME}:${WEBSERVER_PORT}"
+              - "curl ${WEBSERVER_HOSTNAME}:${WEBSERVER_PORT}/index.html"
           periodSeconds: 1
           timeoutSeconds: 1
           failureThreshold: 600
