@@ -35,7 +35,7 @@ spec:
         persistentVolumeClaim:
           claimName: webserver-pvc-{{.Replica}}-{{.Iteration}}
       restartPolicy: Always
-  replicas: 1
+  replicas: 3
   selector:
     matchLabels:
       name: webserver-{{.Replica}}-{{.Iteration}}
