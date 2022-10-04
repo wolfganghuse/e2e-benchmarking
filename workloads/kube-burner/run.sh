@@ -49,6 +49,15 @@ case ${WORKLOAD} in
     label_node_with_label $label
     find_running_pods_num cni
   ;;
+  cluster-density-combined-csi)
+    WORKLOAD_TEMPLATE=workloads/cluster-density-combined-csi/cluster-density-combined-csi.yml
+    METRICS_PROFILE=${METRICS_PROFILE:-metrics-profiles/metrics.yaml}
+    export TEST_JOB_ITERATIONS=${JOB_ITERATIONS:-20}
+    export CSI_RWX=${CSI_RWX:-nutanix-files}
+    export CSI_RWO=${CSI_RWX:-nutanix-volume}
+    label="node-density=enabled"
+    label_node_with_label $label
+  ;;
   pod-density)
     WORKLOAD_TEMPLATE=workloads/node-pod-density/node-pod-density.yml
     METRICS_PROFILE=${METRICS_PROFILE:-metrics-profiles/metrics.yaml}
