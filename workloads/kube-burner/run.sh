@@ -54,7 +54,7 @@ case ${WORKLOAD} in
     METRICS_PROFILE=${METRICS_PROFILE:-metrics-profiles/metrics.yaml}
     export TEST_JOB_ITERATIONS=${JOB_ITERATIONS:-20}
     export CSI_RWX=${CSI_RWX:-nutanix-files}
-    export CSI_RWO=${CSI_RWX:-nutanix-volume}
+    export CSI_RWO=${CSI_RWO:-nutanix-volume}
     label="node-density=enabled"
     label_node_with_label $label
   ;;
