@@ -16,10 +16,6 @@ spec:
         volumeMounts:
         - name: webserver-pvc-{{.Replica}}-{{.Iteration}}
           mountPath: "/var/www"
-        securityContext:
-          privileged: false
-          runAsUser: 1000
-          fsGroup: 1000
       containers:
       - name: webserver
         image: quay-registry-quay-quay-registry.apps.crimson-ocp.dachlab.net/wolfgang/web:latest
@@ -34,10 +30,6 @@ spec:
         - containerPort: 3000
           protocol: TCP
         imagePullPolicy: IfNotPresent
-        securityContext:
-          privileged: false
-          runAsUser: 1000
-          fsGroup: 1000
       volumes:
       - name: webserver-pvc-{{.Replica}}-{{.Iteration}}
         persistentVolumeClaim:
