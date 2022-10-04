@@ -32,6 +32,10 @@ spec:
         imagePullPolicy: IfNotPresent
         securityContext:
           privileged: false
+      volumes:
+      - name: webserver-pvc-{{.Replica}}-{{.Iteration}}
+        persistentVolumeClaim:
+          claimName: webserver-pvc-{{.Replica}}-{{.Iteration}}
       restartPolicy: Always
   replicas: 1
   selector:
