@@ -12,13 +12,13 @@ spec:
       initContainers:
       - name: install
         image: quay-registry-quay-quay-registry.apps.crimson-ocp.dachlab.net/wolfgang/busybox:latest
-        command: ["/bin/sh", "-c","[ ! -e 'var/www/index.html' ] && echo 'INDEX' >> /var/www/index.html "]
+        command: ["/bin/sh", "-c","[ ! -e 'var/www/index.html' ] && echo 'INDEX' >> /var/www/index.html || echo 'Index exists'"]
         volumeMounts:
         - name: webserver-pvc-{{.Replica}}-{{.Iteration}}
           mountPath: "/var/www"
       containers:
       - name: webserver
-        image: quay-registry-quay-quay-registry.apps.crimson-ocp.dachlab.net/wolfgang/web:latest
+        image: quay-registry-quay-quay-registry.apps.crimson-ocp.dachlab.net/wolfgang/web:0.1.0
         resources:
           requests:
             memory: "10Mi"
