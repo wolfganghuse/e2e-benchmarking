@@ -59,7 +59,7 @@ jobs:
     jobIterations: ${TEST_JOB_ITERATIONS}
     qps: ${QPS}
     burst: ${BURST}
-    namespacedIterations: false
+    namespacedIterations: true
     namespace: ${UUID}
     podWait: ${POD_WAIT}
     cleanup: ${CLEANUP}
