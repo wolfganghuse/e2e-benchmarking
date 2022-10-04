@@ -101,7 +101,7 @@ jobs:
           csiRWX: "${CSI_RWX}"
 
       - objectTemplate: webserver-deployment.yml
-        replicas: 3
+        replicas: 1
         inputVars:
           nodeSelector: "${POD_NODE_SELECTOR}"
 
