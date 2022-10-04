@@ -145,7 +145,7 @@ else
 fi
 if [[ ${WORKLOAD} == cluster-density-combined-csi ]]; then
   echo "RWX Storage Class: ${CSI_RWX}"
-  echo "RWX Storage Class: ${CSI_RWO}"
+  echo "RWO Storage Class: ${CSI_RWO}"
 fi
 echo "###############################################"
 if [[ ${PPROF_COLLECTION} == "true" ]] ; then

@@ -11,7 +11,7 @@ spec:
       nodeSelector: {{.nodeSelector}}
       initContainers:
       - name: install
-        image: busybox
+        image: quay.io/wolfgangntnx/busybox:latest
         command: ["/bin/sh", "-c","[ ! -e 'var/www/index.html' ] && echo 'INDEX' >> /var/www/index.html "]
         volumeMounts:
         - name: webserver-pvc-{{.Replica}}-{{.Iteration}}
