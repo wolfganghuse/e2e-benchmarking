@@ -9,6 +9,15 @@ spec:
         name: webserver-{{.Replica}}-{{.Iteration}}
     spec:
       nodeSelector: {{.nodeSelector}}
+      initContainers:
+      - name: install
+        image: busybox
+        command: ["/bin/sh", "-c"]
+        args: ["[ ! -e "var/www/index.html" ] && echo 'INDEX' >> /var/www/index.html "]
+        volumeMounts:
+        - name: webserver-pvc-{{.Replica}}-{{.Iteration}}
+          mountPath: "/var/www"
+      
       containers:
       - name: webserver
         image: quay.io/wolfgangntnx/web:latest
