@@ -8,6 +8,9 @@ spec:
       labels:
         name: webserver-{{.Replica}}-{{.Iteration}}
     spec:
+      securityContext:
+        runAsUser: 1000
+        fsGroup: 1000
       nodeSelector: {{.nodeSelector}}
       initContainers:
       - name: install
