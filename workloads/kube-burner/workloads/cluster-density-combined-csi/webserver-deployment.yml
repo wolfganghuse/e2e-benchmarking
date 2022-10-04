@@ -12,12 +12,10 @@ spec:
       initContainers:
       - name: install
         image: busybox
-        command: ["/bin/sh", "-c"]
-        args: ["[ ! -e "var/www/index.html" ] && echo 'INDEX' >> /var/www/index.html "]
+        command: ["/bin/sh", "-c","[ ! -e 'var/www/index.html' ] && echo 'INDEX' >> /var/www/index.html "]
         volumeMounts:
         - name: webserver-pvc-{{.Replica}}-{{.Iteration}}
           mountPath: "/var/www"
-      
       containers:
       - name: webserver
         image: quay.io/wolfgangntnx/web:latest
