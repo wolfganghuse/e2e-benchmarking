@@ -13,6 +13,13 @@ case ${WORKLOAD} in
     METRICS_PROFILE=${METRICS_PROFILE:-metrics-profiles/metrics-aggregated.yaml}
     export TEST_JOB_ITERATIONS=${JOB_ITERATIONS:-1000}
   ;;
+
+  cluster-density-heavy)
+    WORKLOAD_TEMPLATE=workloads/cluster-density-heavy/cluster-density-heavy.yml
+    METRICS_PROFILE=${METRICS_PROFILE:-metrics-profiles/metrics-aggregated.yaml}
+    export TEST_JOB_ITERATIONS=${JOB_ITERATIONS:-10}
+  ;;
+
   node-density)
     WORKLOAD_TEMPLATE=workloads/node-pod-density/node-pod-density.yml
     METRICS_PROFILE=${METRICS_PROFILE:-metrics-profiles/metrics.yaml}
