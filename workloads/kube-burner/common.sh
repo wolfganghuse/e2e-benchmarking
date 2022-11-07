@@ -1,37 +1,26 @@
 #!/usr/bin/env bash
 set -m
 source ../../utils/common.sh
-source ../../utils/benchmark-operator.sh
 source env.sh
-source ../../utils/compare.sh
+
 
 openshift_login
 
-# If INDEXING is disabled we disable metadata collection
-if [[ ${INDEXING} == "false" ]]; then
-  export METADATA_COLLECTION=false
-  unset PROM_URL
-else
+# If INDEXING is enabled we retrive the prometheus oauth token
+if [[ ${INDEXING} == "true" ]]; then
   if [[ ${HYPERSHIFT} == "false" ]]; then
-    export PROM_TOKEN=$(oc create token -n openshift-monitoring prometheus-k8s || oc sa get-token -n openshift-monitoring prometheus-k8s || oc sa new-token -n openshift-monitoring prometheus-k8s)
+    export PROM_TOKEN=$(oc create token -n openshift-monitoring prometheus-k8s --duration=6h || oc sa get-token -n openshift-monitoring prometheus-k8s || oc sa new-token -n openshift-monitoring prometheus-k8s)
   else
     export PROM_TOKEN="dummytokenforthanos"
     export HOSTED_CLUSTER_NAME=$(oc get infrastructure cluster -o jsonpath='{.status.infrastructureName}')
   fi
 fi
-export TOLERATIONS="[{key: role, value: workload, effect: NoSchedule}]"
 export UUID=${UUID:-$(uuidgen)}
 export OPENSHIFT_VERSION=$(oc version -o json | jq -r '.openshiftVersion') 
 export NETWORK_TYPE=$(oc get network.config/cluster -o jsonpath='{.status.networkType}') 
 export INGRESS_DOMAIN=$(oc get IngressController default -n openshift-ingress-operator -o jsonpath='{.status.domain}' || oc get routes -A --no-headers | head -n 1 | awk {'print$3'} | cut -d "." -f 2-)
 
 platform=$(oc get infrastructure cluster -o jsonpath='{.status.platformStatus.type}')
-
-if [[ ${platform} == "BareMetal" ]]; then
-  # installing python3.8
-  sudo dnf -y install python3.8
-  #sudo alternatives --set python3 /usr/bin/python3.8
-fi
 
 if [[ ${HYPERSHIFT} == "true" ]]; then
   # shellcheck disable=SC2143
@@ -43,6 +32,15 @@ if [[ ${HYPERSHIFT} == "true" ]]; then
     export DAG_ID=$(oc version -o json | jq -r '.openshiftVersion')-$(oc get infrastructure cluster -o jsonpath='{.status.infrastructureName}') # setting a dynamic value
     envsubst < ./grafana-agent.yaml | oc apply -f -
   fi
+  echo "Get all management worker nodes.."
+  export Q_TIME=$(date +"%s")
+  export Q_NODES=""
+  for n in $(curl -k --silent --globoff  ${PROM_URL}/api/v1/query?query='sum(kube_node_role{openshift_cluster_name=~"'${MGMT_CLUSTER_NAME}'",role=~"master|infra|workload"})by(node)&time='$(($Q_TIME-300))'' | jq -r '.data.result[].metric.node'); do
+    Q_NODES=${n}"|"${Q_NODES};
+  done
+  export MGMT_NON_WORKER_NODES=${Q_NODES}
+  # set time for modifier queries 
+  export Q_TIME=$(($Q_TIME+600))
 fi
 
 collect_pprof() {
@@ -54,41 +52,46 @@ collect_pprof() {
   done
 }
 
-deploy_operator() {
-  deploy_benchmark_operator
-}
-
 run_workload() {
-  set -e
-  local tmpdir=$(mktemp -d)
-  if [[ -z ${WORKLOAD_TEMPLATE} ]]; then
-    log "WORKLOAD_TEMPLATE not defined or null!"
-    exit 1
+  local CMD
+  local KUBE_BURNER_DIR 
+  KUBE_BURNER_DIR=$(mktemp -d)
+  if [[ ! -d ${KUBE_DIR} ]]; then
+    mkdir -p ${KUBE_DIR}
   fi
-  cp -pR $(dirname ${WORKLOAD_TEMPLATE})/* ${tmpdir}
-  envsubst < ${WORKLOAD_TEMPLATE} > ${tmpdir}/config.yml
+  if [[ -n ${BUILD_FROM_REPO} ]]; then
+    git clone --depth=1 ${BUILD_FROM_REPO} ${KUBE_BURNER_DIR}
+    make -C ${KUBE_BURNER_DIR} build
+    mv ${KUBE_BURNER_DIR}/bin/amd64/kube-burner ${KUBE_DIR}/kube-burner
+    rm -rf ${KUBE_BURNER_DIR}
+  else
+    curl -sS -L ${KUBE_BURNER_URL} | tar -xzC ${KUBE_DIR}/ kube-burner
+  fi
+  CMD="timeout ${JOB_TIMEOUT} ${KUBE_DIR}/kube-burner init --uuid=${UUID} -c $(basename ${WORKLOAD_TEMPLATE}) --log-level=${LOG_LEVEL}"
+  # When metrics or alerting are enabled we have to pass the prometheus URL to the cmd
+  if [[ ${INDEXING} == "true" ]] || [[ ${PLATFORM_ALERTS} == "true" ]] ; then
+    CMD+=" -u=${PROM_URL} -t ${PROM_TOKEN}"
+  fi
   if [[ -n ${METRICS_PROFILE} ]]; then
-    envsubst < ${METRICS_PROFILE} > ${tmpdir}/metrics.yml || envsubst <  ${METRICS_PROFILE} > ${tmpdir}/metrics.yml
+    log "Indexing enabled, using metrics from ${METRICS_PROFILE}"
+    envsubst < ${METRICS_PROFILE} > ${KUBE_DIR}/metrics.yml || envsubst < ${METRICS_PROFILE} > ${KUBE_DIR}/metrics.yml
+    CMD+=" -m ${KUBE_DIR}/metrics.yml"
   fi
-  if [[ -n ${ALERTS_PROFILE} ]]; then
-    log "Alerting is enabled, fetching ${ALERTS_PROFILE}"
-    cp ${ALERTS_PROFILE} ${tmpdir}/alerts.yml
-  elif [[ ${PLATFORM_ALERTS} == "true" ]]; then
-    log "Platform alerting is enabled, fetching alerst-profiles/${WORKLOAD}-${platform}.yml"
-    cp alerts-profiles/${WORKLOAD}-${platform}.yml ${tmpdir}/alerts.yml
+  if [[ ${PLATFORM_ALERTS} == "true" ]]; then
+    log "Platform alerting enabled, using ${PWD}/alert-profiles/${WORKLOAD}-${platform}.yml"
+    CMD+=" -a ${PWD}/alert-profiles/${WORKLOAD}-${platform}.yml"
   fi
-  log "Creating kube-burner configmap"
-  kubectl create configmap -n benchmark-operator --from-file=${tmpdir} kube-burner-cfg-${UUID}
-  rm -rf ${tmpdir}
-  log "Deploying benchmark"
-  set +e
-  TMPCR=$(mktemp)
-  envsubst < $1 > ${TMPCR}
-  run_benchmark ${TMPCR} $((JOB_TIMEOUT + 600))
+  pushd $(dirname ${WORKLOAD_TEMPLATE})
+  local start_date=$(date +%s%3N)
+  ${CMD}
   rc=$?
-  if [[ ${CHURN:-"false"} == "true" ]]; then
-    churn
+  popd
+  if [[ ${rc} == 0 ]]; then
+    RESULT=Complete
+  else
+    RESULT=Failed
   fi
+  gen_metadata ${WORKLOAD} ${start_date} $(date +%s%3N)
 }
 
 find_running_pods_num() {
@@ -125,19 +128,8 @@ find_running_pods_num() {
   export TEST_JOB_ITERATIONS=${total_pod_count}
 }
 
-check_running_benchmarks() {
-  benchmarks=$(oc get benchmark -n benchmark-operator | awk '{ if ($2 == "kube-burner")print}'| grep -vE "Failed|Complete" | wc -l)
-  if [[ ${benchmarks} -gt 1 ]]; then
-    log "Another kube-burner benchmark is running at the moment"
-    oc get benchmark -n benchmark-operator
-    exit 1
-  fi
-}
-
 cleanup() {
   log "Cleaning up benchmark assets"
-  kubectl delete -f ${TMPCR} 1>/dev/null
-  kubectl delete configmap -n benchmark-operator kube-burner-cfg-${UUID} 1>/dev/null
   if ! oc delete ns -l kube-burner-uuid=${UUID} --grace-period=600 --timeout=${CLEANUP_TIMEOUT} 1>/dev/null; then
     log "Namespaces cleanup failure"
     rc=1
@@ -149,7 +141,7 @@ get_pprof_secrets() {
  oc extract -n openshift-etcd secret/$certkey
  export CERTIFICATE=`base64 -w0 tls.crt`
  export PRIVATE_KEY=`base64 -w0 tls.key`
- export BEARER_TOKEN=$(oc create token -n benchmark-operator kube-burner || oc sa get-token kube-burner -n benchmark-operator)
+ export BEARER_TOKEN=$(oc create token -n benchmark-operator kube-burner --duration=6h || oc sa get-token kube-burner -n benchmark-operator)
 }
 
 delete_pprof_secrets() {
@@ -159,58 +151,6 @@ delete_pprof_secrets() {
 delete_oldpprof_folder() {
  rm -rf pprof-data
 }
-
-get_network_type() {
-if [[ $NETWORK_TYPE == "OVNKubernetes" ]]; then
-  network_ns=openshift-ovn-kubernetes
-else
-  network_ns=openshift-sdn
-fi
-}
-
-check_metric_to_modify() {
-  export div_by=1
-  echo $config | grep -i memory
-  if [[ $? == 0 ]]; then 
-   export div_by=1048576
-  fi
-  echo $config | grep -i latency
-  if [[ $? == 0 ]]; then
-    export div_by=1000
-  fi
-}
-
-run_benchmark_comparison() {
-   if [[ -n ${ES_SERVER} ]] && [[ -n ${COMPARISON_CONFIG} ]]; then
-     log "Installing touchstone"
-     install_touchstone
-     get_network_type
-     export TOUCHSTONE_NAMESPACE=${TOUCHSTONE_NAMESPACE:-"$network_ns"}
-     res_output_dir="/tmp/${WORKLOAD}-${UUID}"
-     mkdir -p ${res_output_dir}
-     final_csv=${res_output_dir}/${UUID}.csv
-     for config in ${COMPARISON_CONFIG}; do
-       check_metric_to_modify
-       envsubst < touchstone-configs/${config} > /tmp/${config}
-       COMPARISON_OUTPUT="${res_output_dir}/${config}"
-       if [[ -n ${ES_SERVER_BASELINE} ]] && [[ -n ${BASELINE_UUID} ]]; then
-         log "Comparing with baseline"
-         compare "${ES_SERVER_BASELINE} ${ES_SERVER}" "${BASELINE_UUID} ${UUID}" "/tmp/${config}" "${GEN_CSV}"
-       else
-         log "Querying results"
-         compare ${ES_SERVER} ${UUID} "/tmp/${config}" "${GEN_CSV}"
-       fi
-       if [[ ${GEN_CSV} == "true" ]]; then
-         python ../../utils/csv_modifier.py -c ${COMPARISON_OUTPUT} -o ${final_csv}
-       fi
-     done
-     if [[ -n ${GSHEET_KEY_LOCATION} ]] && [[ ${GEN_CSV} == "true" ]]; then
-       gen_spreadsheet ${WORKLOAD} ${final_csv} ${EMAIL_ID_FOR_RESULTS_SHEET} ${GSHEET_KEY_LOCATION}
-     fi
-     log "Removing touchstone"
-     remove_touchstone
-  fi
- }
 
 label_node_with_label() {
   colon_param=$(echo $1 | tr "=" ":" | sed 's/:/: /g')
@@ -245,69 +185,4 @@ prep_networkpolicy_workload() {
   export ES_INDEX_NETPOL=${ES_INDEX_NETPOL:-networkpolicy-enforcement}
   oc apply -f workloads/networkpolicy/clusterrole.yml
   oc apply -f workloads/networkpolicy/clusterrolebinding.yml
-}
-
-churn() {
-  log "Starting to churn workload"
-
-  churn_start=`date +%s`
-  churn_end_time=$((${churn_start} + ${CHURN_DURATION}*60))
-
-  log "Churn duration: ${CHURN_DURATION} minutes"
-  log "Churn wait duration: ${CHURN_WAIT} seconds"
-  log "Churn percentage: ${CHURN_PERCENT}%"
-  log "Churn type: ${CHURN_TYPE}"
-
-  namespace_array=(`kubectl get namespaces -l kube-burner-uuid=${UUID} --no-headers | awk '{print $1}'`)
-  namespace_count=${#namespace_array[@]}
-  
-  # The number of iterations we need to modify per round of churn (min 1)
-  modify_count=$((JOB_ITERATIONS*CHURN_PERCENT/100))
-  if [[ ${modify_count} -eq 0 ]]; then modify_count=1; fi
-  
-  current_time=`date +%s` 
-  while [ ${current_time} -le ${churn_end_time} ]; do
-    for ((i=0; i<${modify_count}; i++)); do
-      #Pick random Namespace from the list
-      rand_ns=$(($RANDOM%${namespace_count}))
-
-      if [[ ${CHURN_TYPE} == "pod" ]]; then
-	# Churn type is pod
-	# Delete all the pods in the namespace. The deployment set will recreate them automatically
-	kubectl delete pod --all -n ${namespace_array[$rand_ns]} > /dev/null &
-      elif [[ ${CHURN_TYPE} == "namespace" ]]; then
-	# Churn type is namespace
-	# Get all relevent configs
-	kubectl get -o yaml namespace ${namespace_array[$rand_ns]} > churn_namespace.yaml
-	kubectl get -o yaml configmaps -l kube-burner-uuid=${UUID} -n ${namespace_array[$rand_ns]} > churn_configmaps.yaml
-	kubectl get -o yaml secrets -l kube-burner-uuid=${UUID} -n ${namespace_array[$rand_ns]} > churn_secrets.yaml
-	kubectl get -o yaml all -l kube-burner-uuid=${UUID} -n ${namespace_array[$rand_ns]} > churn_all.yaml
-
-	# Delete namespace
-        kubectl delete namespace ${namespace_array[$rand_ns]} > /dev/null
-
-	# Re-create objects
-	kubectl apply -f churn_namespace.yaml > /dev/null 2>&1
-	kubectl apply -f churn_configmaps.yaml > /dev/null 2>&1
-	kubectl apply -f churn_secrets.yaml > /dev/null 2>&1
-	kubectl apply -f churn_all.yaml > /dev/null 2>&1
-
-	rm -f churn_namespace.yaml churn_configmaps.yaml churn_secrets.yaml churn_all.yaml
-      fi
-    done
-    
-    if [[ ${CHURN_TYPE} == "pod" ]]; then
-      log "Churned the pods in $modify_count namespaces. Sleeping for ${CHURN_WAIT} secounds"
-    elif [[ ${CHURN_TYPE} == "namespace" ]]; then
-      log "Churned all resources in $modify_count namespaces. Sleeping for ${CHURN_WAIT} secounds"
-    fi
-
-    # sleep for the wait time - time consumed by churning if > 0
-    new_time=`date +%s`
-    time_to_sleep=$((${CHURN_WAIT}-((${new_time}-${current_time}))))
-    if [[ ${time_to_sleep} -gt 0 ]]; then
-      sleep ${time_to_sleep}
-    fi
-    current_time=`date +%s` 
-  done
 }

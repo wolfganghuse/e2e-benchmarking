@@ -9,7 +9,7 @@ export ES_SERVER=${ES_SERVER:-https://search-perfscale-dev-chmf5l4sh66lvxbnadi4b
 export ES_INDEX=${ES_INDEX:-ripsaw-kube-burner}
 export STEP_SIZE=${STEP_SIZE:-30s}
 export METADATA_COLLECTION=${METADATA_COLLECTION:-true}
-export PROM_URL=${PROM_URL:-https://prometheus-k8s.openshift-monitoring.svc.cluster.local:9091}
+export PROM_URL=${PROM_URL:-https://$(oc get route -n openshift-monitoring prometheus-k8s -o jsonpath="{.spec.host}")}
 
 # Kube-burner vars
 export QPS=${QPS:-20}
@@ -26,20 +26,27 @@ export ERROR_ON_VERIFY=${ERROR_ON_VERIFY:-true}
 export PRELOAD_IMAGES=${PRELOAD_IMAGES:-true}
 export PRELOAD_PERIOD=${PRELOAD_PERIOD:-2m}
 
-# Kube-burner job
-export KUBE_BURNER_IMAGE=${KUBE_BURNER_IMAGE:-quay.io/cloud-bulldozer/kube-burner:v0.16.2}
+# Kube-burner benchmark
+export KUBE_BURNER_URL=${KUBE_BURNER_URL:-"https://github.com/cloud-bulldozer/kube-burner/releases/download/v0.17.1/kube-burner-0.17.1-Linux-x86_64.tar.gz"}
+export JOB_TIMEOUT=${JOB_TIMEOUT:-4h}
 export NODE_SELECTOR=${NODE_SELECTOR:-'{node-role.kubernetes.io/worker: }'}
-export JOB_TIMEOUT=${JOB_TIMEOUT:-14400}
-export LOG_STREAMING=${LOG_STREAMING:-true}
 export METRICS_PROFILE=${METRICS_PROFILE}
+export JOB_PAUSE=${JOB_PAUSE:-1m}
 
 # kube-burner workload defaults
 export NODE_POD_DENSITY_IMAGE=${NODE_POD_DENSITY_IMAGE:-gcr.io/google_containers/pause:3.1}
 
+# kube-burner churn enablement
+export CHURN=${CHURN:-false}
+export CHURN_DURATION=${CHURN_DURATION:-10m}
+export CHURN_DELAY=${CHURN_DELAY:-60s}
+export CHURN_PERCENT=${CHURN_PERCENT:-10}
+
 # Misc
 export CLEANUP_WHEN_FINISH=${CLEANUP_WHEN_FINISH:-false}
 export CLEANUP_TIMEOUT=${CLEANUP_TIMEOUT:-30m}
-export LOG_LEVEL=${LOG_LEVEL:-error}
+export LOG_LEVEL=${LOG_LEVEL:-info}
+export KUBE_DIR=${KUBE_DIR:-/tmp}
 
 # Pprof
 export PPROF_COLLECTION=${PPROF_COLLECTION:-false}
@@ -73,15 +80,9 @@ export POD_READY_THRESHOLD=${POD_READY_THRESHOLD:-5000ms}
 # Alerting
 export PLATFORM_ALERTS=${PLATFORM_ALERTS:-false}
 
-# Churn
-export CHURN=${CHURN:-false}
-export CHURN_DURATION=${CHURN_DURATION:-10}
-export CHURN_WAIT=${CHURN_WAIT:-30}
-export CHURN_PERCENT=${CHURN_PERCENT:-10}
-export CHURN_TYPE=${CHURN_TYPE:-pod}
-
 # Output and Comparisons
 export COMPARISON_CONFIG=${COMPARISON_CONFIG:-""}
 export GSHEET_KEY_LOCATION=${GSHEET_KEY_LOCATION}
 export EMAIL_ID_FOR_RESULTS_SHEET=${EMAIL_ID_FOR_RESULTS_SHEET}
-GEN_CSV=${GEN_CSV:-false}
+export GEN_CSV=${GEN_CSV:-false}
+export SORT_BY_VALUE=${SORT_BY_VALUE:-true}

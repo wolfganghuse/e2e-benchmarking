@@ -12,7 +12,7 @@ log() {
 function openshift_login () {
   if [[ -z $KUBECONFIG ]] && [[ ! -s $HOME/.kube/config ]]; then
     log "KUBECONFIG var is not defined and cannot find kube config in the home directory, trying to use oc login"
-    if [[ -n ${KUBEUSER}} ]] && [[ -n ${KUBEPASSWORD} ]] && [[ -n ${KUBEURL} ]]; then
+    if [[ -n ${KUBEUSER} ]] && [[ -n ${KUBEPASSWORD} ]] && [[ -n ${KUBEURL} ]]; then
       oc login -u ${KUBEUSER} -p ${KUBEPASSWORD} ${KUBEURL}
     else
      log "No openshift authentication method found, exiting"
@@ -76,9 +76,6 @@ function check_pod_ready_state () {
   return $?
 }
 
-
-
-
 gen_spreadsheet_helper() {
   pip install oauth2client>=4.1.3 gspread
   sheetname=${1}-$(date "+%Y-%m-%dT%H:%M:%S")
@@ -126,12 +123,13 @@ gen_metadata() {
   local END_DATE=$3
 
   # construct all the required information
+  local MGMT_CLUSTER="" # set only for Hypershift cluster
   local VERSION_INFO=$(oc version -o json)
   local INFRA_INFO=$(oc get infrastructure.config.openshift.io cluster -o json)
   local PLATFORM=$(echo ${INFRA_INFO} | jq -r .status.platformStatus.type)
   if [[ ${PLATFORM} == "AWS" ]] ; then
     local CLUSTERTYPE=$(echo ${INFRA_INFO} | jq -r 'try .status.platformStatus.aws.resourceTags | map(select(.key == "red-hat-clustertype"))[0].value' | tr '[:lower:]' '[:upper:]')
-    if [[ ! -z ${CLUSTERTYPE} ]] ; then
+    if [[ ! -z ${CLUSTERTYPE} ]] || [[ ${CLUSTERTYPE} == "NULL" ]] ; then
       PLATFORM=${CLUSTERTYPE}
     fi
   fi
@@ -144,14 +142,17 @@ gen_metadata() {
   local INFRA_NODES_COUNT=$(oc get node -l node-role.kubernetes.io/infra= --no-headers --ignore-not-found | wc -l)
   local SDN_TYPE=$(oc get networks.operator.openshift.io cluster -o jsonpath="{.spec.defaultNetwork.type}")
   if [[ ${PLATFORM} != "BareMetal" ]]; then
-    local MASTER_NODES_TYPE=$(oc get node -l node-role.kubernetes.io/master= --no-headers -o go-template='{{index (index .items 0).metadata.labels "beta.kubernetes.io/instance-type"}}')
-    local WORKER_NODES_TYPE=$(oc get node -l node-role.kubernetes.io/worker= --no-headers -o go-template='{{index (index .items 0).metadata.labels "beta.kubernetes.io/instance-type"}}')
+    local MASTER_NODES_TYPE=$(oc get node -l node-role.kubernetes.io/master= --no-headers --ignore-not-found -o go-template='{{index (index .items 0).metadata.labels "beta.kubernetes.io/instance-type"}}')
+    local WORKER_NODES_TYPE=$(oc get node -l node-role.kubernetes.io/worker= --no-headers --ignore-not-found -o go-template='{{index (index .items 0).metadata.labels "beta.kubernetes.io/instance-type"}}')
     if [[ ${WORKLOAD_NODES_COUNT} -gt 0 ]]; then
-      local WORKLOAD_NODES_TYPE=$(oc get node -l node-role.kubernetes.io/workload= --no-headers -o go-template='{{index (index .items 0).metadata.labels "beta.kubernetes.io/instance-type"}}')
+      local WORKLOAD_NODES_TYPE=$(oc get node -l node-role.kubernetes.io/workload= --no-headers --ignore-not-found -o go-template='{{index (index .items 0).metadata.labels "beta.kubernetes.io/instance-type"}}')
     fi
     if [[ ${INFRA_NODES_COUNT} -gt 0 ]]; then
-      local INFRA_NODES_TYPE=$(oc get node --ignore-not-found -l node-role.kubernetes.io/infra= --no-headers -o go-template='{{index (index .items 0).metadata.labels "beta.kubernetes.io/instance-type"}}')
+      local INFRA_NODES_TYPE=$(oc get node --ignore-not-found -l node-role.kubernetes.io/infra= --no-headers --ignore-not-found -o go-template='{{index (index .items 0).metadata.labels "beta.kubernetes.io/instance-type"}}')
     fi
+  fi
+  if [[ ${HYPERSHIFT} == "true" ]]; then
+    local MGMT_CLUSTER=${MGMT_CLUSTER_NAME}
   fi
   if [[ ${BENCHMARK} =~ "cyclictest" ]]; then
     local WORKLOAD_NODES_COUNT=$(oc get node -l node-role.kubernetes.io/cyclictest= --no-headers --ignore-not-found | wc -l)
@@ -163,8 +164,9 @@ gen_metadata() {
     local WORKLOAD_NODES_COUNT=$(oc get node -l node-role.kubernetes.io/workload= --no-headers --ignore-not-found | wc -l)
   fi
   local TOTAL_NODES=$(oc get node --no-headers | wc -l)
-  local RESULT=$(oc get benchmark -n benchmark-operator ${BENCHMARK} -o json | jq -r '.status.state')
-  local UUID=$(oc get benchmark -n benchmark-operator ${BENCHMARK} -o json | jq -r '.status.uuid')
+  # In case RESULT and UUID haven't been set previously we assume that benchmark-operator was used
+  local RESULT=${RESULT:-$(oc get benchmark -n benchmark-operator ${BENCHMARK} -o json | jq -r '.status.state')}
+  local UUID=${UUID:-$(oc get benchmark -n benchmark-operator ${BENCHMARK} -o json | jq -r '.status.uuid')}
 
 
 # stupid indentation because bash won't find the closing EOF if it's not at the beginning of the line
@@ -189,6 +191,7 @@ local METADATA=$(cat << EOF
 "end_date":"${END_DATE}",
 "workload": "${WORKLOAD}",
 "cluster_name": "${CLUSTER_NAME}",
+"mgmt_cluster_name": "${MGMT_CLUSTER}",
 "result":"${RESULT}"
 }
 EOF

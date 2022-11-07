@@ -15,6 +15,7 @@ In order to kick off one of these benchmarks you must use the run.sh script. The
 - **`custom`**: `WORKLOAD=custom ./run.sh`
 - **`concurrent-builds`**: `WORKLOAD=concurrent-builds ./run.sh`
 - **`cluster-density-ms`**: `WORKLOAD=cluster-density-ms ./run.sh`
+- **`networkpolicy-case1`**: `WORKLOAD=networkpolicy-case1 ./run.sh`
 - **`networkpolicy-case2`**: `WORKLOAD=networkpolicy-case2 ./run.sh`
 - **`networkpolicy-case3`**: `WORKLOAD=networkpolicy-case3 ./run.sh`
 
@@ -25,16 +26,11 @@ Workloads can be tweaked with the following environment variables:
 
 | Variable         | Description                         | Default |
 |------------------|-------------------------------------|---------|
-| **OPERATOR_REPO**    | Benchmark-operator repo         | https://github.com/cloud-bulldozer/benchmark-operator.git      |
-| **OPERATOR_BRANCH**  | Benchmark-operator branch       | master  |
 | **INDEXING**         | Enable/disable indexing         | true    |
 | **ES_SERVER**        | Elasticsearch endpoint          | https://search-perfscale-dev-chmf5l4sh66lvxbnadi4bznl3a.us-west-2.es.amazonaws.com:443|
 | **ES_INDEX**         | Elasticsearch index             | ripsaw-kube-burner|
-| **PROM_URL**         | Prometheus endpoint, it should be Thanos querier endpoint when running on `HYPERSHIFT` cluster             | https://prometheus-k8s.openshift-monitoring.svc.cluster.local:9091|
-| **METADATA_COLLECTION**   | Enable metadata collection | true (If indexing is disabled metadata collection will be also disabled) |
-| **JOB_TIMEOUT**      | Kube-burner's job timeout, in seconds      | 14400 (4 hours) |
-| **POD_READY_TIMEOUT**| Timeout for kube-burner and benchmark-operator pods to be running | 180 |
-| **NODE_SELECTOR**    | The kube-burner pod deployed by benchmark-operator will use this node selector          | {node-role.kubernetes.io/worker: } |
+| **PROM_URL**         | Prometheus endpoint, it should be Thanos querier endpoint when running on `HYPERSHIFT` cluster | Prometheus endpoint is automatically discovered |
+| **JOB_TIMEOUT**      | Kube-burner's timeout, in seconds | 4h (4 hours) |
 | **QPS**              | Queries/sec                     | 20      |
 | **BURST**            | Maximum number of simultaneous queries | 20      |
 | **POD_NODE_SELECTOR**| nodeSelector for pods created by the kube-burner workloads | {node-role.kubernetes.io/worker: } |
@@ -50,8 +46,9 @@ Workloads can be tweaked with the following environment variables:
 | **CLEANUP**          | Delete old namespaces for the selected workload before starting benchmark | true |
 | **CLEANUP_WHEN_FINISH** | Delete benchmark objects and workload's namespaces after running it | false |
 | **CLEANUP_TIMEOUT**  | Timeout value used in resource deletion | 30m |
-| **KUBE_BURNER_IMAGE** | Kube-burner container image | quay.io/cloud-bulldozer/kube-burner:v0.16 |
-| **LOG_LEVEL**        | Kube-burner log level | error |
+| **KUBE_BURNER_URL** | Kube-burner tarball URL | https://github.com/cloud-bulldozer/kube-burner/releases/download/v0.17.0/kube-burner-0.17.0-Linux-x86_64.tar.gz |
+| **BUILD_FROM_REPO** | Rather than downloading the previous tarball, build the kube-burner binary using a specific git repository.  Ex. https://github.com/rsevilla87/kube-burner | "" (Disabled) |
+| **LOG_LEVEL**        | Kube-burner log level | info |
 | **PPROF_COLLECTION** | Collect and store pprof data locally | false |
 | **PPROF_COLLECTION_INTERVAL** | Intervals for which pprof data will be collected | 5m | 
 | **HYPERSHIFT** | Boolean, to be set if its a hypershift hosted cluster | false |
@@ -60,16 +57,16 @@ Workloads can be tweaked with the following environment variables:
 | **THANOS_RECEIVER_URL** | Thanos receiver url endpoint for grafana remote-write agent |  | 
 | **POD_READY_THRESHOLD** | Pod ready latency threshold (only applies node-density and pod-density workloads). [More info](https://kube-burner.readthedocs.io/en/latest/measurements/#pod-latency-thresholds) | 5000ms |
 | **PLATFORM_ALERTS** | Platform alerting enables, kube-burner alerting based cluster's platform, either ALERT_PROFILE or this variable can be set | false |
-| **COMPARISON_CONFIG**        | Touchstone configs. Multiple config files can be passed here. Ex. COMPARISON_CONFIG="podCPU-avg.json clusterVersion.json". [Sample files](https://github.com/cloud-bulldozer/e2e-benchmarking/tree/master/workloads/kube-burner/touchstone-configs) |  |
+| **COMPARISON_CONFIG**        | Touchstone configs. Multiple config files can be passed here. Ex. COMPARISON_CONFIG="podCPU-avg.json clusterVersion.json". [Sample files](../../utils/touchstone-configs) |  |
 | **TOUCHSTONE_NAMESPACE**        | Namespace where we query for metrics specified in touchstone config files | openshift-sdn or openshift-ovn-kubernetes |
 | **GSHEET_KEY_LOCATION**        | Location of service account key to generate google sheets |  |
 | **EMAIL_ID_FOR_RESULTS_SHEET**        | Email id where the google sheets needs to be sent |  |
 | **GEN_CSV**             | Generate a benchmark-comparison csv, required to generate the spreadsheet | "false" |
-| **CHURN**             | Enable "churning" of the workload after the benchmark completes | "false" |
-| **CHURN_DURATION**             | Time, in minutes, to churn for | 10 |
-| **CHURN_WAIT**             | Time, in seconds, to wait between each churn | 60 |
+| **KUBE_DIR**             | The directory where to place the kube-burner executable | /tmp |
+| **CHURN**             | Enable "churning" of the workload after the objects are created | "false" |
+| **CHURN_DURATION**             | Time, in time type (ex: 1h10m11s), to churn for | 10m |
+| **CHURN_DELAY**             | Time, in time type (ex: 1m30s), to wait between each churn | 60s |
 | **CHURN_PERCENT**             | Percentage of JOB_ITERATIONS that we should churn each round | 10 |
-| **CHURN_TYPE**             | Type of object to churn. pod or namespace. Namespace will delete/recreate everything in the namespace | pod |
 
 **Note**: You can use basic authentication for ES indexing using the notation `http(s)://[username]:[password]@[host]:[port]` in **ES_SERVER**.
 
@@ -198,17 +195,16 @@ Each iteration creates the following objects:
 
 ### Churn
 
-Churning a workload allows you to scale down and then up a percentage of pods or namespaces **AFTER** the workload has run, but before cleanup (if enabled). It takes in a percentage, **CHURN_PERCENT**, which is the percentage of JOB_ITERATIONS it churns during each churn cycle. If the **pod** CHURN_TYPE is used then it will delete and recreate all the pods in a namespace. If the **namespace** CHURN_TYPE is used then it will delete and recreate **ALL** the resources in the namespace. After each churn cycle it will sleep for the remainder of **CHURN_WAIT** seconds if the time it took to churn was less than the **CHURN_WAIT** otherwise it continues immediately. This loop continues until the **CHURN_DURATION** has elapsed.
+Churning a workload allows you to scale down and then up a percentage of **JOB_ITERATIONS** after the objects have been created. It takes in a percentage, **CHURN_PERCENT**, which is the percentage of JOB_ITERATIONS it churns during each cycle. It will delete and recreate **ALL** the objects specified in the job definition. After each churn cycle it will sleep for the **CHURN_DELAY**. This loop continues until the **CHURN_DURATION** has elapsed.
 
-To churn 20% of your **JOB_ITERATIONS** using the namespace method every 30 seconds for a total duration (the calculated time from when the first churn begins + the **CHURN_DURATION**) of 60 minutes you would utilize these variables:
+To churn 20% of your **JOB_ITERATIONS** every 30 seconds for a total duration (the calculated time from when the first churn begins + the **CHURN_DURATION**) of 60 minutes you would utilize these variables:
 
 - **CHURN**=true
-- **CHURN_DURATION**=60
-- **CHURN_PERCENT**=75
-- **CHURN_WAIT**=30
-- **CHURN_TYPE**=namespace
+- **CHURN_DURATION**=60m
+- **CHURN_PERCENT**=20
+- **CHURN_DELAY**=30s
 
-**NOTE: The churn functionality is only designed to work with current cluster-density type tests**
+**NOTE: The churn functionality is only implemented for namespacedIteration creation jobs (ex: cluster-density)**
 
 ### Snappy integration configurations
 

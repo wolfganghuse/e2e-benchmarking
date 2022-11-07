@@ -2,9 +2,7 @@
 
 . common.sh
 . build_helper.sh
-
-deploy_operator
-check_running_benchmarks
+. ../../utils/compare.sh
 
 label=""
 case ${WORKLOAD} in
@@ -114,6 +112,12 @@ case ${WORKLOAD} in
     METRICS_PROFILE=${METRICS_PROFILE:-metrics-profiles/hypershift-metrics.yaml}
     export TEST_JOB_ITERATIONS=${JOB_ITERATIONS:-75}
   ;; 
+  networkpolicy-case1)
+    WORKLOAD_TEMPLATE=workloads/networkpolicy/case1.yml
+    METRICS_PROFILE=${METRICS_PROFILE:-metrics-profiles/metrics-ovn.yaml}
+    export TEST_JOB_ITERATIONS=${JOB_ITERATIONS:-500}
+    prep_networkpolicy_workload
+  ;;
   networkpolicy-case2)
     WORKLOAD_TEMPLATE=workloads/networkpolicy/case2.yml
     METRICS_PROFILE=${METRICS_PROFILE:-metrics-profiles/metrics-ovn.yaml}
@@ -170,7 +174,7 @@ if [[ ${WORKLOAD} == "concurrent-builds" ]]; then
   unlabel_nodes_with_label $label
   cat conc_builds_results.out
 else
-  run_workload kube-burner-crd.yaml
+  run_workload
 fi
 
 if [[ ${CLEANUP_WHEN_FINISH} == "true" ]]; then
@@ -185,11 +189,5 @@ if [[ ${ENABLE_SNAPPY_BACKUP} == "true" ]] ; then
   snappy_backup "" "pprof.tar.gz" ${WORKLOAD}
 fi
 run_benchmark_comparison
-
-if [[ ${CLEANUP_WHEN_FINISH} == "true" ]]; then
-  remove_benchmark_operator
-else
-  remove_cli
-fi
 
 exit ${rc}

@@ -2,6 +2,7 @@
 set -e
 
 source ./common.sh
+source ../../utils/compare.sh
 
 get_scenario
 log "###############################################"
@@ -11,6 +12,7 @@ log "Service type: ${SERVICE_TYPE}"
 log "Terminations: ${TERMINATIONS}"
 log "Deployment replicas: ${DEPLOYMENT_REPLICAS}"
 log "###############################################"
+check_hypershift
 deploy_infra
 tune_workload_node apply
 client_pod=$(oc get pod -l app=http-scale-client -n http-scale-client | awk '/Running/{print $1}')
@@ -48,6 +50,8 @@ done
 tune_workload_node delete
 cleanup_infra
 reschedule_monitoring_stack infra
+
+export WORKLOAD="router-perf"
 run_benchmark_comparison
 
 if [[ ${ENABLE_SNAPPY_BACKUP} == "true" ]] ; then

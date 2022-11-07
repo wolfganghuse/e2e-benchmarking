@@ -2,16 +2,16 @@
 set -x
 
 source env.sh
+TEMP_DIR=`mktemp -d`
 
 prep(){
     if [[ -z $(go version) ]]; then
         curl -L https://go.dev/dl/go1.18.2.linux-amd64.tar.gz -o go1.18.2.linux-amd64.tar.gz
-        tar -C /usr/local -xzf go1.18.2.linux-amd64.tar.gz
-        export PATH=/usr/local/go/bin:$PATH
+        tar -C ${TEMP_DIR}/ -xzf go1.18.2.linux-amd64.tar.gz
+        export PATH=${TEMP_DIR}/go/bin:$PATH
     fi
     if [[ ${HYPERSHIFT_CLI_INSTALL} != "false" ]]; then
         echo "Building Hypershift binaries locally.."
-        export TEMP_DIR=$(mktemp -d)
         git clone -q --depth=1 --single-branch --branch ${HYPERSHIFT_CLI_VERSION} ${HYPERSHIFT_CLI_FORK} -v $TEMP_DIR/hypershift
         pushd $TEMP_DIR/hypershift
         make build
@@ -19,14 +19,16 @@ prep(){
         popd
     fi
     if [[ -z $(rosa version)  ]]; then
-        sudo curl -L $(curl -s https://api.github.com/repos/openshift/rosa/releases/latest | jq -r ".assets[] | select(.name == \"rosa-linux-amd64\") | .browser_download_url") --output /usr/local/bin/rosa
-        sudo curl -L $(curl -s https://api.github.com/repos/openshift-online/ocm-cli/releases/latest | jq -r ".assets[] | select(.name == \"ocm-linux-amd64\") | .browser_download_url") --output /usr/local/bin/ocm
-        sudo chmod +x /usr/local/bin/rosa && chmod +x /usr/local/bin/ocm
+        mkdir -p ${TEMP_DIR}/bin/
+        sudo curl -L $(curl -s https://api.github.com/repos/openshift/rosa/releases/latest | jq -r ".assets[] | select(.name == \"rosa-linux-amd64\") | .browser_download_url") --output ${TEMP_DIR}/bin/rosa
+        sudo curl -L $(curl -s https://api.github.com/repos/openshift-online/ocm-cli/releases/latest | jq -r ".assets[] | select(.name == \"ocm-linux-amd64\") | .browser_download_url") --output ${TEMP_DIR}/bin/ocm
+        chmod +x ${TEMP_DIR}/bin/rosa && chmod +x ${TEMP_DIR}/bin/ocm
+        export PATH=${TEMP_DIR}/bin:$PATH
     fi
     if [[ -z $(oc version) ]]; then
         rosa download openshift-client
         tar xzvf openshift-client-linux.tar.gz
-        sudo mv oc kubectl /usr/local/bin/
+        mv oc kubectl ${TEMP_DIR}/bin/
     fi
     if [[ -z $(aws --version) ]]; then
         curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "awscliv2.zip"
@@ -90,7 +92,7 @@ create_cluster(){
     if [[ $RELEASE_IMAGE != "" ]]; then
         RELEASE="--release-image=$RELEASE_IMAGE"
     fi
-    hypershift create cluster aws --name $HOSTED_CLUSTER_NAME --node-pool-replicas=$COMPUTE_WORKERS_NUMBER --base-domain $BASEDOMAIN --pull-secret pull-secret --aws-creds aws_credentials --region $AWS_REGION --control-plane-availability-policy $REPLICA_TYPE --network-type $NETWORK_TYPE --instance-type $COMPUTE_WORKERS_TYPE  ${RELEASE} ${CPO_IMAGE_ARG}
+    hypershift create cluster aws --name $HOSTED_CLUSTER_NAME --node-pool-replicas=$COMPUTE_WORKERS_NUMBER --base-domain $BASEDOMAIN --pull-secret pull-secret --aws-creds aws_credentials --region $AWS_REGION --control-plane-availability-policy $CONTROLPLANE_REPLICA_TYPE  --infra-availability-policy $INFRA_REPLICA_TYPE --network-type $NETWORK_TYPE --instance-type $COMPUTE_WORKERS_TYPE  ${RELEASE} ${CPO_IMAGE_ARG} --additional-tags mgmt-cluster:${MGMT_CLUSTER_NAME}
     echo "Wait till hosted cluster got created and in progress.."
     oc wait --for=condition=available=false --timeout=60s hostedcluster -n clusters $HOSTED_CLUSTER_NAME
     oc get hostedcluster -n clusters $HOSTED_CLUSTER_NAME
@@ -98,7 +100,7 @@ create_cluster(){
 
 create_empty_cluster(){
     echo $PULL_SECRET > pull-secret
-    hypershift create cluster none --name $HOSTED_CLUSTER_NAME --node-pool-replicas=0 --base-domain $BASEDOMAIN --pull-secret pull-secret --control-plane-availability-policy $REPLICA_TYPE --network-type $NETWORK_TYPE
+    hypershift create cluster none --name $HOSTED_CLUSTER_NAME --node-pool-replicas=0 --base-domain $BASEDOMAIN --pull-secret pull-secret --control-plane-availability-policy $CONTROLPLANE_REPLICA_TYPE --infra-availability-policy $INFRA_REPLICA_TYPE --network-type $NETWORK_TYPE
     echo "Wait till hosted cluster got created and in progress.."
     oc wait --for=condition=available=false --timeout=60s hostedcluster -n clusters $HOSTED_CLUSTER_NAME
     oc get hostedcluster -n clusters $HOSTED_CLUSTER_NAME
@@ -156,7 +158,7 @@ cleanup(){
         if [ "${NODEPOOL_SIZE}" == "0" ] ; then
             hypershift destroy cluster none --name $h
         else
-            hypershift destroy cluster aws --name $h --aws-creds aws_credentials --region $AWS_REGION
+            hypershift destroy cluster aws --name $h --aws-creds aws_credentials --region $AWS_REGION --destroy-cloud-resources
         fi
         sleep 5 # pause a few secs before destroying next...
     done
@@ -169,6 +171,15 @@ cleanup(){
     aws s3api wait bucket-not-exists --bucket $MGMT_CLUSTER_NAME-aws-rhperfscale-org
     sleep 10
     ROUTE_ID=$(aws route53 list-hosted-zones --output text --query HostedZones | grep $BASEDOMAIN | grep -v terraform | awk '{print$2}' | awk -F/ '{print$3}')
+    aws route53 list-resource-record-sets --hosted-zone-id $ROUTE_ID --output json | jq -c '.ResourceRecordSets[]' |
+    while read -r resourcerecordset; do
+        read -r name type <<<$(echo $(jq -r '.Name,.Type' <<<"$resourcerecordset"))
+        if [ $type != "NS" -a $type != "SOA" ]; then
+            aws route53 change-resource-record-sets --hosted-zone-id $ROUTE_ID \
+            --change-batch '{"Changes":[{"Action":"DELETE","ResourceRecordSet":'"$resourcerecordset"'
+            }]}' --output text --query 'ChangeInfo.Id'
+        fi
+    done
     for id in $ROUTE_ID; do aws route53 delete-hosted-zone --id=$id || true ; done
     rm -f *-admin-kubeconfig || true
     rm -f pull-secret || true
@@ -187,7 +198,7 @@ index_mgmt_cluster_stat(){
     if [ $? -ne 0 ]; then
         export KUBE_BURNER_RELEASE=${KUBE_BURNER_RELEASE:-0.16}
         curl -L https://github.com/cloud-bulldozer/kube-burner/releases/download/v${KUBE_BURNER_RELEASE}/kube-burner-${KUBE_BURNER_RELEASE}-Linux-x86_64.tar.gz -o kube-burner.tar.gz
-        sudo tar -xvzf kube-burner.tar.gz -C /usr/local/bin/
+        sudo tar -xvzf kube-burner.tar.gz -C ${TEMP_DIR}/bin/
     fi
     export MGMT_CLUSTER_NAME=$(oc get infrastructure cluster -o jsonpath='{.status.infrastructureName}')
     export HOSTED_CLUSTER_NS="clusters-$HOSTED_CLUSTER_NAME"
