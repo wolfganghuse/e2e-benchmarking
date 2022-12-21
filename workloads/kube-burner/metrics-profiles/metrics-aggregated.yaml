@@ -86,7 +86,13 @@
 
 - query: histogram_quantile(0.99, rate(etcd_network_peer_round_trip_time_seconds_bucket[5m]))
   metricName: 99thEtcdRoundTripTimeSeconds
-
+  
+- query: etcd_server_slow_apply_total{job=~"etcd"}
+  metricName: etcd_slow_apply
+  
+- query: etcd_server_slow_read_indexes_total{job=~"etcd"}
+  metricName: etcd_slow_read
+  
 - query: sum by (cluster_version)(etcd_cluster_version)
   metricName: etcdVersion
   instant: true
