@@ -1,0 +1,45 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: webserver-{{.Replica}}-{{.Iteration}}
+spec:
+  template:
+    metadata:
+      labels:
+        name: webserver-{{.Replica}}-{{.Iteration}}
+    spec:
+      nodeSelector: {{.nodeSelector}}
+      initContainers:
+      - name: install
+        image: quay-registry-quay-quay-registry.apps.crimson-ocp.dachlab.net/wolfgang/busybox:latest
+        command: ["/bin/sh", "-c","[ ! -e 'var/www/index.html' ] && echo 'INDEX' >> /var/www/index.html || echo 'Index exists'"]
+        volumeMounts:
+        - name: webserver-pvc-{{.Replica}}-{{.Iteration}}
+          mountPath: "/var/www"
+      containers:
+      - name: webserver
+        image: quay-registry-quay-quay-registry.apps.crimson-ocp.dachlab.net/wolfgang/web:0.1.0
+        resources:
+          requests:
+            memory: "10Mi"
+            cpu: "10m"
+        volumeMounts:
+        - mountPath: /var/www
+          name: webserver-pvc-{{.Replica}}-{{.Iteration}}
+        ports:
+        - containerPort: 3000
+          protocol: TCP
+        imagePullPolicy: IfNotPresent
+      volumes:
+      - name: webserver-pvc-{{.Replica}}-{{.Iteration}}
+        persistentVolumeClaim:
+          claimName: webserver-pvc-{{.Replica}}-{{.Iteration}}
+      restartPolicy: Always
+  replicas: 3
+  selector:
+    matchLabels:
+      name: webserver-{{.Replica}}-{{.Iteration}}
+  triggers:
+  - type: ConfigChange
+  strategy:
+    type: RollingUpdate

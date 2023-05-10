@@ -63,6 +63,22 @@ case ${WORKLOAD} in
     label="node-density=enabled"
     label_node_with_label $label
   ;;
+  cluster-density-rwo-csi)
+    WORKLOAD_TEMPLATE=workloads/cluster-density-rwo-csi/cluster-density-rwo-csi.yml
+    METRICS_PROFILE=${METRICS_PROFILE:-metrics-profiles/metrics.yaml}
+    export TEST_JOB_ITERATIONS=${JOB_ITERATIONS:-20}
+    export CSI_RWO=${CSI_RWO:-nutanix-volume}
+    label="node-density=enabled"
+    label_node_with_label $label
+  ;;
+  cluster-density-rwx-csi)
+    WORKLOAD_TEMPLATE=workloads/cluster-density-rwx-csi/cluster-density-rwx-csi.yml
+    METRICS_PROFILE=${METRICS_PROFILE:-metrics-profiles/metrics.yaml}
+    export TEST_JOB_ITERATIONS=${JOB_ITERATIONS:-20}
+    export CSI_RWX=${CSI_RWX:-nutanix-files}
+    label="node-density=enabled"
+    label_node_with_label $label
+  ;;
   pod-density)
     WORKLOAD_TEMPLATE=workloads/node-pod-density/node-pod-density.yml
     METRICS_PROFILE=${METRICS_PROFILE:-metrics-profiles/metrics.yaml}

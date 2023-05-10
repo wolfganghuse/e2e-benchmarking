@@ -1,0 +1,57 @@
+kind: Deployment
+apiVersion: apps/v1
+metadata:
+  name: perfapp-{{.Replica}}-{{.Iteration}}
+spec:
+  template:
+    metadata:
+      labels:
+        name: perfapp-{{.Replica}}-{{.Iteration}}
+    spec:
+      nodeSelector: {{.nodeSelector}}
+      initContainers:
+      - name: perfapp-init
+        image: quay-registry-quay-quay-registry.apps.crimson-ocp.dachlab.net/wolfgang/pgbench:latest
+        args: ["-i","-s","1"]
+        env:
+        - name: PGUSER
+          value: admin
+        - name: PGPASSWORD
+          value: secret
+        - name: PGDATABASE
+          value: kubelet-density
+        - name: PGHOST
+          value: postgresql-{{.Replica}}-{{.Iteration}}
+        - name: PGPORT
+          value: '5432'
+      containers:
+      - name: perfapp
+        image: quay.io/wolfgangntnx/pgbench:latest
+        args: ["-c","2","-T","60","-R","400"]
+        resources:
+          requests:
+            cpu: 2m
+            memory: 6Mi
+        env:
+        - name: PGUSER
+          value: admin
+        - name: PGPASSWORD
+          value: secret
+        - name: PGDATABASE
+          value: kubelet-density
+        - name: PGHOST
+          value: postgresql-{{.Replica}}-{{.Iteration}}
+        - name: PGPORT
+          value: '5432'
+        imagePullPolicy: IfNotPresent
+        securityContext:
+          privileged: false
+      restartPolicy: Always
+  replicas: 1
+  selector:
+    matchLabels:
+      name: perfapp-{{.Replica}}-{{.Iteration}}
+  triggers:
+  - type: ConfigChange
+  strategy:
+    type: RollingUpdate
