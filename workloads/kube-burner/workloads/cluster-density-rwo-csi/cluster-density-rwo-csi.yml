@@ -73,11 +73,7 @@ jobs:
     churn: {{.CHURN}}
     churnDuration: {{.CHURN_DURATION}}
     churnPercent: {{.CHURN_PERCENT}}
-    churnDelay: {{.CHURN_DELAY}}    namespaceLabels:
-      security.openshift.io/scc.podSecurityLabelSync: false
-      pod-security.kubernetes.io/enforce: privileged
-      pod-security.kubernetes.io/audit: privileged
-      pod-security.kubernetes.io/warn: privileged
+    churnDelay: {{.CHURN_DELAY}}    
     namespaceLabels:
       security.openshift.io/scc.podSecurityLabelSync: false
       pod-security.kubernetes.io/enforce: privileged
