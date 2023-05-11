@@ -25,7 +25,8 @@ global:
       - name: kube-apiserver-heap
         namespace: "openshift-kube-apiserver"
         labelSelector: {app: openshift-kube-apiserver}
-        bearerToken: {{ .BEARER_TOKEN }} url: https://localhost:6443/debug/pprof/heap
+        bearerToken: {{ .BEARER_TOKEN }} 
+        url: https://localhost:6443/debug/pprof/heap
 
       - name: kube-controller-manager-heap
         namespace: "openshift-kube-controller-manager"
