@@ -8,7 +8,6 @@ spec:
       labels:
         name: perfapp-{{.Replica}}-{{.Iteration}}
     spec:
-      nodeSelector: {{.nodeSelector}}
       initContainers:
       - name: perfapp-init
         image: quay-registry-quay-quay-registry.apps.crimson-ocp.dachlab.net/wolfgang/pgbench:latest

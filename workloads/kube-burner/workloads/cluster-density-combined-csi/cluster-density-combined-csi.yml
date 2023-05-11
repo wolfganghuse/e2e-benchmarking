@@ -84,16 +84,12 @@ jobs:
 
       - objectTemplate: postgres-deployment.yml
         replicas: 1
-        inputVars:
-          nodeSelector: "${POD_NODE_SELECTOR}"
 
       - objectTemplate: postgres-service.yml
         replicas: 1
 
       - objectTemplate: app-deployment.yml
         replicas: 1
-        inputVars:
-          nodeSelector: "${POD_NODE_SELECTOR}"
 
       - objectTemplate: webserver-pvc.yml
         replicas: 1
@@ -102,13 +98,9 @@ jobs:
 
       - objectTemplate: webserver-deployment.yml
         replicas: 1
-        inputVars:
-          nodeSelector: "${POD_NODE_SELECTOR}"
 
       - objectTemplate: webserver-service.yml
         replicas: 1
 
       - objectTemplate: curl-deployment.yml
         replicas: 1
-        inputVars:
-          nodeSelector: "${POD_NODE_SELECTOR}"

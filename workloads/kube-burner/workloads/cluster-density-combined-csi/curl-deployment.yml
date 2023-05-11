@@ -8,7 +8,6 @@ spec:
       labels:
         name: curl-{{.Replica}}-{{.Iteration}}
     spec:
-      nodeSelector: {{.nodeSelector}}
       containers:
       - name: curlapp
         image: quay.io/cloud-bulldozer/curl:latest

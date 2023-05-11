@@ -87,13 +87,9 @@ jobs:
 
       - objectTemplate: webserver-deployment.yml
         replicas: 1
-        inputVars:
-          nodeSelector: {{.POD_NODE_SELECTOR}}
 
       - objectTemplate: webserver-service.yml
         replicas: 1
 
       - objectTemplate: curl-deployment.yml
         replicas: 1
-        inputVars:
-          nodeSelector: {{.POD_NODE_SELECTOR}}

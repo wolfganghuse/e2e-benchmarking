@@ -8,7 +8,6 @@ spec:
       labels:
         name: webserver-{{.Replica}}-{{.Iteration}}
     spec:
-      nodeSelector: {{.nodeSelector}}
       initContainers:
       - name: install
         image: quay-registry-quay-quay-registry.apps.crimson-ocp.dachlab.net/wolfgang/busybox:latest
