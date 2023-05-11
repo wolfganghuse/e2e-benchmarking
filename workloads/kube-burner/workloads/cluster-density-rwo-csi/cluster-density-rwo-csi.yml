@@ -57,6 +57,7 @@ global:
 jobs:
   - name: cluster-density-rwo-csi
     jobIterations: {{.TEST_JOB_ITERATIONS}}
+    jobPause: {{.JOB_PAUSE}}
     qps: {{.QPS}}
     burst: {{.BURST}}
     namespacedIterations: true

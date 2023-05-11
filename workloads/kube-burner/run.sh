@@ -60,20 +60,24 @@ case ${WORKLOAD} in
     export TEST_JOB_ITERATIONS=${JOB_ITERATIONS:-20}
     export CSI_RWX=${CSI_RWX:-nutanix-files}
     export CSI_RWO=${CSI_RWO:-nutanix-volume}
-    export WAIT_WHEN_FINISHED=${WAIT_WHEN_FINISHED:-3m}
-    export CLEANUP=${CLEANUP:-true}
+    export JOB_PAUSE=${JOB_PAUSE:-180s}
+    export CLEANUP_WHEN_FINISH=${CLEANUP_WHEN_FINISH:-true}
   ;;
   cluster-density-rwo-csi)
     WORKLOAD_TEMPLATE=workloads/cluster-density-rwo-csi/cluster-density-rwo-csi.yml
     METRICS_PROFILE=${METRICS_PROFILE:-metrics-profiles/metrics.yaml}
     export TEST_JOB_ITERATIONS=${JOB_ITERATIONS:-20}
     export CSI_RWO=${CSI_RWO:-nutanix-volume}
+    export JOB_PAUSE=${JOB_PAUSE:-180s}
+    export CLEANUP_WHEN_FINISH=${CLEANUP_WHEN_FINISH:-true}
   ;;
   cluster-density-rwx-csi)
     WORKLOAD_TEMPLATE=workloads/cluster-density-rwx-csi/cluster-density-rwx-csi.yml
     METRICS_PROFILE=${METRICS_PROFILE:-metrics-profiles/metrics.yaml}
     export TEST_JOB_ITERATIONS=${JOB_ITERATIONS:-20}
     export CSI_RWX=${CSI_RWX:-nutanix-files}
+    export JOB_PAUSE=${JOB_PAUSE:-180s}
+    export CLEANUP_WHEN_FINISH=${CLEANUP_WHEN_FINISH:-true}
   ;;
   pod-density)
     WORKLOAD_TEMPLATE=workloads/node-pod-density/node-pod-density.yml
