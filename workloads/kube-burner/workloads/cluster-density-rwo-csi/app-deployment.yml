@@ -10,7 +10,7 @@ spec:
     spec:
       initContainers:
       - name: perfapp-init
-        image: quay-registry-quay-quay-registry.apps.crimson-ocp.dachlab.net/wolfgang/pgbench:latest
+        image: quay.io/wolfgangntnx/pgbench:latest
         args: ["-i","-s","1"]
         env:
         - name: PGUSER
