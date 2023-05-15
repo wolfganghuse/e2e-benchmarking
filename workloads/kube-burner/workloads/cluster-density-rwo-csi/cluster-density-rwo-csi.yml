@@ -97,6 +97,7 @@ jobs:
         replicas: 1
 
   - name: cluster-density-rwo-csi-delete-pvc
+    jobType: delete
     jobIterations: {{.TEST_JOB_ITERATIONS}}
     jobPause: {{.JOB_PAUSE}}
     qps: {{.QPS}}
