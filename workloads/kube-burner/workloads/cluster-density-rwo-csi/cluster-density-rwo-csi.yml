@@ -110,7 +110,7 @@ jobs:
     verifyObjects: {{.VERIFY_OBJECTS}}
     errorOnVerify: {{.ERROR_ON_VERIFY}}
     maxWaitTimeout: {{.MAX_WAIT_TIMEOUT}}
-    preLoadImages: {{.PRELOAD_IMAGES}}
+    preLoadImages: false
     preLoadPeriod: {{.PRELOAD_PERIOD}}
     churn: {{.CHURN}}
     churnDuration: {{.CHURN_DURATION}}
@@ -123,6 +123,14 @@ jobs:
       pod-security.kubernetes.io/warn: privileged
 
     objects:
+      - kind: Service
+        labelSelector: {kube-burner-job: cluster-density-rwo-csi}
+        apiVersion: v1
+
+      - kind: Deployment
+        labelSelector: {kube-burner-job: cluster-density-rwo-csi}
+        apiVersion: apps/v1
+
       - kind: PersistentVolumeClaim
         labelSelector: {kube-burner-job: cluster-density-rwo-csi}
         apiVersion: v1
