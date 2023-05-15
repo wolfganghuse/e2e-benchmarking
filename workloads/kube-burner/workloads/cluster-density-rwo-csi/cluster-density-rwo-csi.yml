@@ -95,3 +95,36 @@ jobs:
 
       - objectTemplate: app-deployment.yml
         replicas: 1
+
+  - name: cluster-density-rwo-csi-delete-pvc
+    jobIterations: {{.TEST_JOB_ITERATIONS}}
+    jobPause: {{.JOB_PAUSE}}
+    qps: {{.QPS}}
+    burst: {{.BURST}}
+    namespacedIterations: true
+    namespace: {{.UUID}}
+    podWait: {{.POD_WAIT}}
+    cleanup: {{.CLEANUP}}
+    waitFor: {{.WAIT_FOR}}
+    waitWhenFinished: {{.WAIT_WHEN_FINISHED}}
+    verifyObjects: {{.VERIFY_OBJECTS}}
+    errorOnVerify: {{.ERROR_ON_VERIFY}}
+    maxWaitTimeout: {{.MAX_WAIT_TIMEOUT}}
+    preLoadImages: {{.PRELOAD_IMAGES}}
+    preLoadPeriod: {{.PRELOAD_PERIOD}}
+    churn: {{.CHURN}}
+    churnDuration: {{.CHURN_DURATION}}
+    churnPercent: {{.CHURN_PERCENT}}
+    churnDelay: {{.CHURN_DELAY}}    
+    namespaceLabels:
+      security.openshift.io/scc.podSecurityLabelSync: false
+      pod-security.kubernetes.io/enforce: privileged
+      pod-security.kubernetes.io/audit: privileged
+      pod-security.kubernetes.io/warn: privileged
+
+    objects:
+      - kind: PersistentVolumeClaim
+        labelSelector: {kube-burner-job: cluster-density-rwo-csi}
+        apiVersion: v1
+
+
